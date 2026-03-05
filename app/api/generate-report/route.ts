@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // Fetch mood logs for the week
     const { data: logs, error } = await supabase
       .from('mood_logs')
-      .select('mood_score, substances_used, created_at, journal_text')
+      .select('mood_score, substances, created_at, journal_text')
       .eq('user_id', user.id)
       .gte('created_at', startDate.toISOString())
       .lte('created_at', endDate.toISOString())
@@ -165,12 +165,11 @@ export async function POST(req: NextRequest) {
           ` : ''}
 
           <div class="section-title">📝 Recent Entries</div>
-          ${
-            logs && logs.length > 0
-              ? logs
-                  .slice(0, 10)
-                  .map(
-                    (log) => `
+          ${logs && logs.length > 0
+        ? logs
+          .slice(0, 10)
+          .map(
+            (log) => `
             <div class="entry">
               <div class="entry-header">
                 <span class="entry-date">${new Date(log.created_at).toLocaleDateString()}</span>
@@ -179,10 +178,10 @@ export async function POST(req: NextRequest) {
               ${log.journal_text ? `<div class="entry-text">${log.journal_text.substring(0, 100)}...</div>` : ''}
             </div>
           `
-                  )
-                  .join('')
-              : '<p style="color: #999;">No entries this week</p>'
-          }
+          )
+          .join('')
+        : '<p style="color: #999;">No entries this week</p>'
+      }
 
           <div class="footer">
             <p>Generated on ${new Date().toLocaleDateString()} | MindTrack Wellness Report</p>
@@ -202,8 +201,8 @@ function calculateMostCommonSubstance(logs: any[]): string | null {
   const substanceCount: Record<string, number> = {}
 
   logs?.forEach((log) => {
-    if (log.substances_used && Array.isArray(log.substances_used)) {
-      log.substances_used.forEach((substance: string) => {
+    if (log.substances && Array.isArray(log.substances)) {
+      log.substances.forEach((substance: string) => {
         substanceCount[substance] = (substanceCount[substance] || 0) + 1
       })
     }

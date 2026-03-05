@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BottomNav } from '@/components/bottom-nav'
 import { Card } from '@/components/ui/card'
-import { Heart, Check, ArrowLeft, Mic, MicOff, Loader2 } from 'lucide-react'
+import { Heart, Check, ArrowLeft, Mic, MicOff, Smile } from 'lucide-react'
 import Link from 'next/link'
+import { useLanguage } from '@/components/language-provider'
+
+const FaceEmotionDetector = lazy(() => import('@/components/face-emotion-detector'))
 
 const SUBSTANCES = ['Alcohol', 'Caffeine', 'Nicotine', 'Cannabis']
 const TIMES = ['Morning', 'Afternoon', 'Evening', 'Night']
@@ -14,11 +17,15 @@ const TIMES = ['Morning', 'Afternoon', 'Evening', 'Night']
 export default function LogsPage() {
   const [user, setUser] = useState<any>(null)
   const [moodScore, setMoodScore] = useState(7)
+  const [detectedEmotion, setDetectedEmotion] = useState<string | null>(null)
+  const [showFaceDetector, setShowFaceDetector] = useState(false)
   useEffect(() => { moodScoreRef.current = moodScore }, [moodScore])
   const [substances, setSubstances] = useState<string[]>([])
   const [quantity, setQuantity] = useState('')
   const [timeOfDay, setTimeOfDay] = useState('Afternoon')
   const [journal, setJournal] = useState('')
+  const [faceImageBase64, setFaceImageBase64] = useState<string | null>(null)
+  const faceImageRef = useRef<string | null>(null)
   const journalRef = useRef('')  // Ref to track journal for use inside speech callbacks
   const userRef = useRef<any>(null)
   const moodScoreRef = useRef(7)
@@ -38,6 +45,7 @@ export default function LogsPage() {
 
   const router = useRouter()
   const supabase = createClient()
+  const { t, language } = useLanguage()
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -61,6 +69,29 @@ export default function LogsPage() {
   useEffect(() => { quantityRef.current = quantity }, [quantity])
   useEffect(() => { timeOfDayRef.current = timeOfDay }, [timeOfDay])
   useEffect(() => { journalRef.current = journal }, [journal])
+  useEffect(() => { faceImageRef.current = faceImageBase64 }, [faceImageBase64])
+
+  const uploadFaceImage = async (userId: string, imageBase64: string | null) => {
+    if (!imageBase64) return null
+    try {
+      const res = await fetch(imageBase64)
+      const blob = await res.blob()
+      const fileName = `${userId}/${Date.now()}.jpg`
+      const { data, error } = await supabase.storage
+        .from('mood_images')
+        .upload(fileName, blob, { contentType: 'image/jpeg' })
+
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage
+          .from('mood_images')
+          .getPublicUrl(fileName)
+        return publicUrlData.publicUrl
+      }
+    } catch (err) {
+      console.error("Failed to upload face image:", err)
+    }
+    return null
+  }
 
   const startRecording = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -86,7 +117,7 @@ export default function LogsPage() {
     const recognition = new SpeechRecognition()
     recognition.continuous = true
     recognition.interimResults = true
-    recognition.lang = 'en-US'
+    recognition.lang = language === 'ta' ? 'ta-IN' : 'en-US'
 
     recognition.onstart = () => {
       setIsRecording(true)
@@ -109,16 +140,16 @@ export default function LogsPage() {
       if (finalText) {
         const lower = finalText.trim().toLowerCase()
 
-        // Voice command: "stop" → stop recording
-        if (lower === 'stop.' || lower === 'stop') {
-          console.log('[Voice] "stop" command detected')
+        // Voice command: "stop" -> stop recording
+        if (lower === 'stop.' || lower === 'stop' || lower === 'நிறுத்து.' || lower === 'நிறுத்து') {
+          console.log('[Voice] "stop/நிறுத்து" command detected')
           stopRecording()
           return
         }
 
-        // Voice command: "done" → save the mood entry
-        if (lower === 'done.' || lower === 'done') {
-          console.log('[Voice] "done" command detected — auto submitting')
+        // Voice command: "done" -> save the mood entry
+        if (lower === 'done.' || lower === 'done' || lower === 'முடிந்தது.' || lower === 'முடிந்தது') {
+          console.log('[Voice] "done/முடிந்தது" command detected — auto submitting')
           stopRecording()
           submitByVoice()
           return
@@ -169,6 +200,10 @@ export default function LogsPage() {
   const submitByVoice = async () => {
     if (!userRef.current) return
     setSubmitting(true)
+
+    // Upload image if it exists
+    const face_image_url = await uploadFaceImage(userRef.current.id, faceImageRef.current)
+
     const { error } = await supabase.from('mood_logs').insert({
       user_id: userRef.current.id,
       mood_score: moodScoreRef.current,
@@ -176,6 +211,7 @@ export default function LogsPage() {
       quantity: quantityRef.current || null,
       time_of_day: timeOfDayRef.current,
       journal_text: journalRef.current,
+      face_image_url: face_image_url
     })
     setSubmitting(false)
     if (!error) {
@@ -208,6 +244,9 @@ export default function LogsPage() {
 
     setSubmitting(true)
 
+    // Upload image if it exists
+    const face_image_url = await uploadFaceImage(user.id, faceImageBase64)
+
     const { error } = await supabase.from('mood_logs').insert({
       user_id: user.id,
       mood_score: moodScore,
@@ -215,6 +254,7 @@ export default function LogsPage() {
       quantity: quantity || null,
       time_of_day: timeOfDay,
       journal_text: journal,
+      face_image_url: face_image_url
     })
 
     setSubmitting(false)
@@ -222,6 +262,13 @@ export default function LogsPage() {
     if (error) {
       console.error('Error logging mood:', error)
     } else {
+      // Trigger alert check (fire-and-forget)
+      fetch('/api/alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => { }) // Silent fail if no email configured yet
+
       setSuccess(true)
       setTimeout(() => { router.push('/dashboard') }, 2000)
     }
@@ -242,8 +289,8 @@ export default function LogsPage() {
           <div className="mb-4 flex justify-center">
             <Check className="w-16 h-16 text-green-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Mood logged!</h2>
-          <p className="text-gray-600 dark:text-gray-400">Redirecting to dashboard...</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('moodLogged')}</h2>
+          <p className="text-gray-600 dark:text-gray-400">{t('redirecting')}</p>
         </div>
       </div>
     )
@@ -257,17 +304,62 @@ export default function LogsPage() {
           <Link href="/dashboard" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
             <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Log Your Mood</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('logYourMood')}</h1>
         </div>
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6">
         <form onSubmit={handleSubmit} className="space-y-6" suppressHydrationWarning>
+
+          {/* 📸 Facial Emotion Detection */}
+          <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Smile className="w-4 h-4 text-purple-500" />
+                    {t('emotionDetection')}
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('letAiDetect')}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFaceDetector(!showFaceDetector)}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition ${showFaceDetector
+                    ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-purple-50 hover:text-purple-600'
+                    }`}
+                >
+                  {showFaceDetector ? t('hideCamera') : t('openCamera')}
+                </button>
+              </div>
+              {detectedEmotion && (
+                <div className="mb-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-xs text-purple-700 dark:text-purple-300 font-medium">
+                  {t('emotionDetected')}
+                </div>
+              )}
+              {showFaceDetector && (
+                <Suspense fallback={<div className="text-center py-4 text-sm text-gray-400">{t('loadingCamera')}</div>}>
+                  <FaceEmotionDetector
+                    onEmotionDetected={(mood, emotion, imageBase64) => {
+                      setMoodScore(mood)
+                      setDetectedEmotion(emotion)
+                      if (imageBase64) {
+                        setFaceImageBase64(imageBase64)
+                      }
+                      setShowFaceDetector(false)
+                    }}
+                  />
+                </Suspense>
+              )}
+            </div>
+          </Card>
+
           {/* Mood Score Slider */}
           <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             <div className="p-6">
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-4">
-                How's your mood?
+                {t('howsYourMood')}
               </label>
               <div className="flex justify-between items-end gap-4">
                 <div className="text-4xl">
@@ -296,7 +388,7 @@ export default function LogsPage() {
           <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             <div className="p-6">
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-4">
-                Substances used today
+                {t('substancesUsed')}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {SUBSTANCES.map((substance) => (
@@ -309,7 +401,7 @@ export default function LogsPage() {
                       : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'
                       }`}
                   >
-                    {substance}
+                    {t(substance)}
                   </button>
                 ))}
               </div>
@@ -321,7 +413,7 @@ export default function LogsPage() {
             <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
               <div className="p-6">
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Quantity (optional)
+                  {t('quantityOpt')}
                 </label>
                 <input
                   type="text"
@@ -339,7 +431,7 @@ export default function LogsPage() {
           <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             <div className="p-6">
               <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-4">
-                Time of day
+                {t('timeOfDay')}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 {TIMES.map((time) => (
@@ -352,7 +444,7 @@ export default function LogsPage() {
                       : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'
                       }`}
                   >
-                    {time}
+                    {t(time)}
                   </button>
                 ))}
               </div>
@@ -364,7 +456,7 @@ export default function LogsPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-semibold text-gray-900 dark:text-white">
-                  Notes (optional)
+                  {t('notesOpt')}
                 </label>
 
                 {/* Voice Journal Button */}
@@ -388,12 +480,12 @@ export default function LogsPage() {
                     {isRecording ? (
                       <>
                         <MicOff className="w-3.5 h-3.5" />
-                        Stop
+                        {t('stop')}
                       </>
                     ) : (
                       <>
                         <Mic className="w-3.5 h-3.5" />
-                        Voice
+                        {t('voice')}
                       </>
                     )}
                   </button>
@@ -409,15 +501,15 @@ export default function LogsPage() {
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                       </span>
-                      <span className="text-xs font-semibold text-red-600 dark:text-red-400">Recording... Speak now</span>
+                      <span className="text-xs font-semibold text-red-600 dark:text-red-400">{t('recordingSpeak')}</span>
                     </div>
                   </div>
                   <p className="text-sm text-red-700 dark:text-red-300 italic min-h-[20px] mb-2">
                     {liveTranscript || '...'}
                   </p>
                   <div className="flex gap-3 text-xs text-red-500 dark:text-red-400 border-t border-red-200 dark:border-red-700 pt-2 mt-1">
-                    <span>💾 Say <strong>"done"</strong> to save</span>
-                    <span>⏹️ Say <strong>"stop"</strong> to cancel</span>
+                    <span>💾 {t('sayDone')}</span>
+                    <span>⏹️ {t('sayStop')}</span>
                   </div>
                 </div>
               )}
@@ -432,7 +524,7 @@ export default function LogsPage() {
               <textarea
                 value={journal}
                 onChange={(e) => setJournal(e.target.value)}
-                placeholder={voiceSupported ? "How are you feeling? Type or use the 🎤 Voice button above to speak..." : "How are you feeling? What's on your mind?"}
+                placeholder={voiceSupported ? t('voiceJournalPlaceholder') : t('normalPlaceholder')}
                 rows={4}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 suppressHydrationWarning
@@ -440,7 +532,7 @@ export default function LogsPage() {
 
               {!voiceSupported && (
                 <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                  Voice journaling is not supported in your browser. Try Chrome or Edge.
+                  {t('voiceNotSupported')}
                 </p>
               )}
             </div>
@@ -453,7 +545,7 @@ export default function LogsPage() {
             className="w-full bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50"
             suppressHydrationWarning
           >
-            {submitting ? 'Saving...' : 'Save Mood Entry'}
+            {submitting ? t('saving') : t('saveMoodEntry')}
           </button>
         </form>
       </div>

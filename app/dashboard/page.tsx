@@ -8,14 +8,17 @@ import { MoodScoreCard } from '@/components/mood-score-card'
 import { RiskLevelBadge } from '@/components/risk-level-badge'
 import { StreakTracker } from '@/components/streak-tracker'
 import { Card } from '@/components/ui/card'
-import { Heart, LogOut, Calendar, MessageCircle, FileText } from 'lucide-react'
+import { Heart, LogOut, Calendar, MessageCircle, FileText, Search, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
+import { useLanguage } from '@/components/language-provider'
 
 interface MoodLog {
+  id: string
   mood: number
   substances: string[]
   timestamp: string
   journal: string
+  face_image_url: string | null
 }
 
 export default function DashboardPage() {
@@ -23,15 +26,19 @@ export default function DashboardPage() {
   const [todayMood, setTodayMood] = useState(7)
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low')
   const [recentLogs, setRecentLogs] = useState<MoodLog[]>([])
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
+  const [dateFilter, setDateFilter] = useState('')
+  const [visibleCount, setVisibleCount] = useState(5)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const isInitializing = useRef(false)
+  const { t } = useLanguage()
 
   useEffect(() => {
     setMounted(true)
-    
+
     if (isInitializing.current) return
     isInitializing.current = true
 
@@ -70,15 +77,17 @@ export default function DashboardPage() {
           .select('*')
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
-          .limit(5)
+          .limit(100)
 
         if (recentData) {
           setRecentLogs(
             recentData.map((log: any) => ({
+              id: log.id,
               mood: log.mood_score,
               substances: log.substances || [],
               timestamp: log.created_at,
               journal: log.journal_text || '',
+              face_image_url: log.face_image_url || null,
             }))
           )
 
@@ -125,23 +134,38 @@ export default function DashboardPage() {
   const downloadWeeklyReport = async () => {
     try {
       const response = await fetch('/api/generate-report', { method: 'POST' })
-      const { html } = await response.json()
+      const json = await response.json()
 
-      if (!html) {
-        alert('Failed to generate report')
+      if (!response.ok || !json.html) {
+        alert(`Failed to generate report: ${json.error || 'Unknown error'}`)
         return
       }
 
-      // Create a simple PDF by opening in new window
-      const win = window.open()
+      // Inject a print button into the HTML and open it in a new window
+      const htmlWithPrint = json.html.replace(
+        '</body>',
+        `<div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;gap:8px;">
+           <button onclick="window.print()" style="background:#ef4444;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+             🖨️ Save as PDF / Print
+           </button>
+           <button onclick="window.close()" style="background:#6b7280;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+             ✕ Close
+           </button>
+         </div>
+         <style>@media print { button { display:none !important; } }</style>
+        </body>`
+      )
+
+      const win = window.open('', '_blank')
       if (win) {
-        win.document.write(html)
+        win.document.write(htmlWithPrint)
         win.document.close()
-        setTimeout(() => win.print(), 500)
+      } else {
+        alert('Pop-up was blocked. Please allow pop-ups for this site and try again.')
       }
     } catch (error) {
       console.log('[v0] Error downloading report:', error)
-      alert('Failed to generate report')
+      alert('Failed to generate report. Please try again.')
     }
   }
 
@@ -177,7 +201,7 @@ export default function DashboardPage() {
 
       <div className="max-w-md mx-auto px-4 py-6">
         {/* Greeting */}
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Good day</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{t('good_day')}</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-6">
           {new Date().toLocaleDateString('en-US', {
             weekday: 'long',
@@ -207,50 +231,117 @@ export default function DashboardPage() {
             className="flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
           >
             <Calendar className="w-5 h-5 text-red-500" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Calendar</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">{t('calendar_cta')}</span>
           </Link>
           <Link
             href="/mira"
             className="flex items-center justify-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
           >
             <MessageCircle className="w-5 h-5 text-pink-500" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Chat Mira</span>
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">{t('chat_mira')}</span>
           </Link>
         </div>
 
         {/* Today's Summary */}
         <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-6">
           <div className="p-6">
-            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">Today's Summary</h3>
-            {recentLogs.length > 0 ? (
-              <div className="space-y-4">
-                {recentLogs.slice(0, 2).map((log, idx) => (
-                  <div key={idx} className="flex items-start gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0">
-                    <div className="text-3xl">{log.mood <= 3 ? '😢' : log.mood <= 5 ? '😕' : log.mood <= 7 ? '😐' : log.mood <= 9 ? '🙂' : '😊'}</div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-900 dark:text-white">{log.mood}/10 - {new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-                      {log.substances.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {log.substances.map((s) => (
-                            <span key={s} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 px-2 py-1 rounded">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {log.journal && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{log.journal.substring(0, 50)}...</p>}
-                    </div>
-                  </div>
-                ))}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('todays_summary')}</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => {
+                    setDateFilter(e.target.value)
+                    setVisibleCount(5) // Reset visible count on search
+                  }}
+                  className="w-full sm:w-auto pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  aria-label={t('search_by_date')}
+                />
               </div>
-            ) : (
-              <p className="text-gray-600 dark:text-gray-400">No mood logs yet. Start tracking your mood!</p>
-            )}
+            </div>
+            {(() => {
+              const filteredLogs = dateFilter
+                ? recentLogs.filter((log) => log.timestamp.startsWith(dateFilter))
+                : recentLogs
+
+              return filteredLogs.length > 0 ? (
+                <>
+                  <div className="space-y-4">
+                    {filteredLogs.slice(0, visibleCount).map((log) => (
+                      <div key={log.id} className="pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0 pt-1">
+                        <div
+                          className="flex items-start gap-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition"
+                          onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                        >
+                          <div className="text-3xl">{log.mood <= 3 ? '😢' : log.mood <= 5 ? '😕' : log.mood <= 7 ? '😐' : log.mood <= 9 ? '🙂' : '😊'}</div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start">
+                              <p className="font-semibold text-gray-900 dark:text-white">{log.mood}/10 - {new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
+                              <svg className={`w-4 h-4 text-gray-400 transition-transform ${expandedLogId === log.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                            {expandedLogId !== log.id && (
+                              <div className="mt-1">
+                                {log.substances.length > 0 && <span className="text-xs text-orange-600 dark:text-orange-400 block font-medium">{t('substances_logged')}</span>}
+                                {log.journal && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{log.journal}</p>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {expandedLogId === log.id && (
+                          <div className="mt-3 pl-14 pr-2 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                            {log.face_image_url && (
+                              <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/5">
+                                <img src={log.face_image_url} alt="Face during entry" className="w-full h-auto object-cover max-h-48" />
+                              </div>
+                            )}
+                            {log.substances.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Substances</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {log.substances.map((s) => (
+                                    <span key={s} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 px-2.5 py-1 rounded-full font-medium">
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {log.journal && (
+                              <div>
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">{t('journal_note')}</p>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                                  {log.journal}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {visibleCount < filteredLogs.length && (
+                    <button
+                      onClick={() => setVisibleCount((prev) => prev + 5)}
+                      className="w-full mt-4 flex items-center justify-center gap-2 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700"
+                    >
+                      {t('show_more')} <ChevronDown className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400">{t('no_logs')}</p>
+              )
+            })()}
             <Link
               href="/logs"
               className="mt-4 inline-block text-red-500 font-semibold text-sm hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
             >
-              Log a mood entry →
+              {t('log_entry_cta')}
             </Link>
           </div>
         </Card>
@@ -263,8 +354,8 @@ export default function DashboardPage() {
           >
             <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             <div>
-              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Weekly Report</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400">PDF Download</p>
+              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">{t('weekly_report')}</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">{t('pdf_download')}</p>
             </div>
           </button>
 
@@ -274,8 +365,8 @@ export default function DashboardPage() {
           >
             <Heart className="w-5 h-5 text-red-600 dark:text-red-400" />
             <div>
-              <p className="text-xs font-semibold text-red-700 dark:text-red-300">Need help?</p>
-              <p className="text-xs text-red-600 dark:text-red-400">Crisis resources</p>
+              <p className="text-xs font-semibold text-red-700 dark:text-red-300">{t('need_help')}</p>
+              <p className="text-xs text-red-600 dark:text-red-400">{t('crisis_resources')}</p>
             </div>
           </Link>
         </div>

@@ -5,11 +5,13 @@ import { usePathname } from 'next/navigation'
 import { Home, BarChart3, BookOpen, User, Moon, Sun, MessageCircle } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useState, useEffect } from 'react'
+import { useLanguage } from '@/components/language-provider'
 
 export function BottomNav() {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const { t } = useLanguage()
 
   useEffect(() => {
     setMounted(true)
@@ -26,11 +28,11 @@ export function BottomNav() {
   }
 
   const navItems = [
-    { href: '/dashboard', icon: Home, label: 'Home' },
-    { href: '/insights', icon: BarChart3, label: 'Insights' },
-    { href: '/mira', icon: MessageCircle, label: 'Mira' },
-    { href: '/logs', icon: BookOpen, label: 'Logs' },
-    { href: '/profile', icon: User, label: 'Profile' },
+    { href: '/dashboard', icon: Home, label: t('home') },
+    { href: '/insights', icon: BarChart3, label: t('insights') },
+    { href: '/mira', icon: MessageCircle, label: t('mira') },
+    { href: '/logs', icon: BookOpen, label: t('logs') },
+    { href: '/profile', icon: User, label: t('profile') },
   ]
 
   return (
@@ -43,11 +45,10 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition ${
-                active
+              className={`flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition ${active
                   ? 'text-red-500'
                   : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-              }`}
+                }`}
             >
               <Icon className="w-6 h-6" />
               <span className="text-xs font-medium">{item.label}</span>
@@ -66,7 +67,7 @@ export function BottomNav() {
             ) : (
               <Moon className="w-6 h-6" />
             )}
-            <span className="text-xs font-medium">Theme</span>
+            <span className="text-xs font-medium">{t('theme')}</span>
           </button>
         )}
       </div>
