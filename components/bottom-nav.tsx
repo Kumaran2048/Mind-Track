@@ -2,14 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, BarChart3, BookOpen, User, Moon, Sun, MessageCircle } from 'lucide-react'
-import { useTheme } from 'next-themes'
+import { Home, BarChart3, BookOpen, User, MessageCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '@/components/language-provider'
+import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler'
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const { t } = useLanguage()
 
@@ -46,8 +45,8 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition ${active
-                  ? 'text-red-500'
-                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                ? 'text-red-500'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
                 }`}
             >
               <Icon className="w-6 h-6" />
@@ -55,21 +54,11 @@ export function BottomNav() {
             </Link>
           )
         })}
-        {mounted && (
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-6 h-6" />
-            ) : (
-              <Moon className="w-6 h-6" />
-            )}
-            <span className="text-xs font-medium">{t('theme')}</span>
-          </button>
-        )}
+        {/* Animated theme toggler */}
+        <div className="flex flex-col items-center gap-1 py-2 px-3">
+          <AnimatedThemeToggler />
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('theme')}</span>
+        </div>
       </div>
     </nav>
   )

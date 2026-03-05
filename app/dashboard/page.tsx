@@ -8,9 +8,11 @@ import { MoodScoreCard } from '@/components/mood-score-card'
 import { RiskLevelBadge } from '@/components/risk-level-badge'
 import { StreakTracker } from '@/components/streak-tracker'
 import { Card } from '@/components/ui/card'
-import { Heart, LogOut, Calendar, MessageCircle, FileText, Search, ChevronDown } from 'lucide-react'
+import { Heart, LogOut, Calendar, MessageCircle, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { useLanguage } from '@/components/language-provider'
+import { PixelImage } from '@/components/ui/pixel-image'
+import { AnimatedList } from '@/components/ui/animated-list'
 
 interface MoodLog {
   id: string
@@ -27,8 +29,6 @@ export default function DashboardPage() {
   const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low')
   const [recentLogs, setRecentLogs] = useState<MoodLog[]>([])
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
-  const [dateFilter, setDateFilter] = useState('')
-  const [visibleCount, setVisibleCount] = useState(5)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
@@ -77,7 +77,7 @@ export default function DashboardPage() {
           .select('*')
           .eq('user_id', session.user.id)
           .order('created_at', { ascending: false })
-          .limit(100)
+          .limit(10)
 
         if (recentData) {
           setRecentLogs(
@@ -244,102 +244,83 @@ export default function DashboardPage() {
 
         {/* Today's Summary */}
         <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 mb-6">
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('todays_summary')}</h3>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => {
-                    setDateFilter(e.target.value)
-                    setVisibleCount(5) // Reset visible count on search
-                  }}
-                  className="w-full sm:w-auto pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  aria-label={t('search_by_date')}
-                />
-              </div>
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('todays_summary')}</h3>
+              <Link
+                href="/history"
+                className="text-xs font-semibold text-red-500 hover:text-red-600"
+              >
+                See all →
+              </Link>
             </div>
-            {(() => {
-              const filteredLogs = dateFilter
-                ? recentLogs.filter((log) => log.timestamp.startsWith(dateFilter))
-                : recentLogs
-
-              return filteredLogs.length > 0 ? (
-                <>
-                  <div className="space-y-4">
-                    {filteredLogs.slice(0, visibleCount).map((log) => (
-                      <div key={log.id} className="pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:pb-0 pt-1">
-                        <div
-                          className="flex items-start gap-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 p-2 -mx-2 rounded-lg transition"
-                          onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
-                        >
-                          <div className="text-3xl">{log.mood <= 3 ? '😢' : log.mood <= 5 ? '😕' : log.mood <= 7 ? '😐' : log.mood <= 9 ? '🙂' : '😊'}</div>
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start">
-                              <p className="font-semibold text-gray-900 dark:text-white">{log.mood}/10 - {new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</p>
-                              <svg className={`w-4 h-4 text-gray-400 transition-transform ${expandedLogId === log.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                            {expandedLogId !== log.id && (
-                              <div className="mt-1">
-                                {log.substances.length > 0 && <span className="text-xs text-orange-600 dark:text-orange-400 block font-medium">{t('substances_logged')}</span>}
-                                {log.journal && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">{log.journal}</p>}
-                              </div>
-                            )}
-                          </div>
+            {recentLogs.length > 0 ? (
+              <AnimatedList delay={200}>
+                {recentLogs.slice(0, 3).map((log) => (
+                  <div key={log.id} className="py-3">
+                    <div
+                      className="flex items-center gap-3 cursor-pointer"
+                      onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                    >
+                      <span className="text-2xl flex-shrink-0">
+                        {log.mood <= 2 ? '😢' : log.mood <= 4 ? '😟' : log.mood <= 6 ? '😐' : log.mood <= 8 ? '🙂' : '😊'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-gray-900 dark:text-white">
+                            {log.mood}/10 &nbsp;—&nbsp; {new Date(log.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                          </p>
+                          <svg className={`w-4 h-4 text-gray-400 transition-transform ${expandedLogId === log.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
                         </div>
-
-                        {expandedLogId === log.id && (
-                          <div className="mt-3 pl-14 pr-2 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                            {log.face_image_url && (
-                              <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/5">
-                                <img src={log.face_image_url} alt="Face during entry" className="w-full h-auto object-cover max-h-48" />
-                              </div>
-                            )}
-                            {log.substances.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">Substances</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {log.substances.map((s) => (
-                                    <span key={s} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 px-2.5 py-1 rounded-full font-medium">
-                                      {s}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {log.journal && (
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">{t('journal_note')}</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
-                                  {log.journal}
-                                </p>
-                              </div>
-                            )}
-                          </div>
+                        {log.substances.length > 0 && (
+                          <p className="text-xs font-semibold text-red-500 mt-0.5">{t('substances_logged')}</p>
+                        )}
+                        {expandedLogId !== log.id && log.journal && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{log.journal}</p>
                         )}
                       </div>
-                    ))}
+                    </div>
+
+                    {expandedLogId === log.id && (
+                      <div className="mt-3 ml-9 space-y-3">
+                        {log.face_image_url && (
+                          <div className="mt-1">
+                            <PixelImage
+                              src={log.face_image_url}
+                              alt="Face during entry"
+                              customGrid={{ rows: 3, cols: 5 }}
+                              grayscaleAnimation
+                              className="border border-gray-200 dark:border-gray-700"
+                            />
+                          </div>
+                        )}
+                        {log.substances.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {log.substances.map((s) => (
+                              <span key={s} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 px-2.5 py-1 rounded-full font-medium">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {log.journal && (
+                          <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                            {log.journal}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {visibleCount < filteredLogs.length && (
-                    <button
-                      onClick={() => setVisibleCount((prev) => prev + 5)}
-                      className="w-full mt-4 flex items-center justify-center gap-2 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700"
-                    >
-                      {t('show_more')} <ChevronDown className="w-4 h-4" />
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-600 dark:text-gray-400">{t('no_logs')}</p>
-              )
-            })()}
+                ))}
+              </AnimatedList>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('no_logs')}</p>
+            )}
             <Link
               href="/logs"
-              className="mt-4 inline-block text-red-500 font-semibold text-sm hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+              className="mt-4 inline-block text-red-500 font-semibold text-sm hover:text-red-600"
             >
               {t('log_entry_cta')}
             </Link>

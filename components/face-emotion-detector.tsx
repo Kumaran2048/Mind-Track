@@ -185,106 +185,207 @@ export default function FaceEmotionDetector({ onEmotionDetected }: FaceEmotionDe
     }
 
     return (
-        <div className="rounded-xl border-2 border-dashed border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/10 p-4">
-            <div className="flex items-center justify-between mb-3">
+        <div className="rounded-xl overflow-hidden border border-cyan-900/60 bg-[#041922]">
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-cyan-900/40">
                 <div className="flex items-center gap-2">
-                    <Smile className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
-                        Auto Emotion Detection
-                    </span>
-                    <span className="text-xs bg-purple-100 dark:bg-purple-800 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
-                        AI
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_#22d3ee]" />
+                    <span className="text-xs font-mono font-bold text-cyan-400 tracking-widest uppercase">
+                        AI Emotion Scanner
                     </span>
                 </div>
-                {isActive && (
-                    <button
-                        type="button"
-                        onClick={retryDetection}
-                        className="text-purple-500 hover:text-purple-700 transition"
-                        title="Retry detection"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-cyan-600">v2.1</span>
+                    {isActive && (
+                        <button
+                            type="button"
+                            onClick={retryDetection}
+                            className="text-cyan-500 hover:text-cyan-300 transition"
+                            title="Retry"
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {!isActive ? (
-                <div className="text-center py-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        Let the camera detect your emotion and auto-fill your mood score
+                /* ── IDLE STATE ─────────────────────────────── */
+                <div className="flex flex-col items-center justify-center py-10 gap-4 relative overflow-hidden">
+                    {/* Background grid */}
+                    <div
+                        className="absolute inset-0 opacity-10"
+                        style={{
+                            backgroundImage: 'linear-gradient(#22d3ee 1px, transparent 1px), linear-gradient(90deg, #22d3ee 1px, transparent 1px)',
+                            backgroundSize: '24px 24px',
+                        }}
+                    />
+
+                    {/* Pulsing face icon */}
+                    <div className="relative">
+                        <div className="w-20 h-20 rounded-full border-2 border-dashed border-cyan-500/60 animate-[spin_12s_linear_infinite] flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-full border border-cyan-400/40 flex items-center justify-center">
+                                <Smile className="w-8 h-8 text-cyan-400 opacity-80" />
+                            </div>
+                        </div>
+                        {/* Corner brackets */}
+                        <span className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-cyan-400" />
+                        <span className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-cyan-400" />
+                        <span className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-cyan-400" />
+                        <span className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-cyan-400" />
+                    </div>
+
+                    <p className="text-xs font-mono text-cyan-600 text-center px-6 z-10">
+                        AWAITING BIOMETRIC INPUT<br />
+                        <span className="text-cyan-800">position face within frame</span>
                     </p>
+
                     <button
                         type="button"
                         onClick={startCamera}
                         disabled={isLoading}
-                        className="flex items-center gap-2 mx-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                        className="z-10 flex items-center gap-2 border border-cyan-500 text-cyan-300 hover:bg-cyan-500/20 px-5 py-2 rounded font-mono text-xs font-bold tracking-widest uppercase transition disabled:opacity-40"
                     >
-                        {isLoading ? (
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Camera className="w-4 h-4" />
-                        )}
-                        {isLoading ? 'Loading...' : 'Detect My Emotion'}
+                        {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                        {isLoading ? 'LOADING...' : 'INITIATE SCAN'}
                     </button>
                 </div>
             ) : (
-                <div className="space-y-3">
-                    {/* Camera preview */}
-                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video max-h-40">
+                /* ── ACTIVE / SCANNING STATE ────────────────── */
+                <div className="space-y-0">
+                    {/* Camera viewport with HUD overlays */}
+                    <div className="relative bg-black overflow-hidden" style={{ aspectRatio: '4/3', maxHeight: 220 }}>
+                        {/* Live video feed */}
                         <video
                             ref={videoRef}
-                            className="w-full h-full object-cover"
-                            autoPlay
-                            muted
-                            playsInline
+                            className="w-full h-full object-cover opacity-80"
+                            autoPlay muted playsInline
                         />
                         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-                        {/* Scanning overlay */}
-                        {!detectedEmotion && (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="border-2 border-purple-400 rounded-lg w-20 h-24 animate-pulse opacity-70" />
+                        {/* Background grid */}
+                        <div
+                            className="absolute inset-0 pointer-events-none opacity-10"
+                            style={{
+                                backgroundImage: 'linear-gradient(#22d3ee 1px, transparent 1px), linear-gradient(90deg, #22d3ee 1px, transparent 1px)',
+                                backgroundSize: '20px 20px',
+                            }}
+                        />
+
+                        {/* Outer corner brackets */}
+                        <span className="absolute top-2 left-2 w-5 h-5 border-t-2 border-l-2 border-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                        <span className="absolute top-2 right-2 w-5 h-5 border-t-2 border-r-2 border-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                        <span className="absolute bottom-2 left-2 w-5 h-5 border-b-2 border-l-2 border-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                        <span className="absolute bottom-2 right-2 w-5 h-5 border-b-2 border-r-2 border-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+
+                        {/* Face targeting reticle */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="relative">
+                                {/* Outer dashed spinning ring */}
+                                <div className="w-28 h-28 rounded-full border-2 border-dashed border-cyan-400/70 animate-[spin_8s_linear_infinite] shadow-[0_0_12px_#22d3ee50]" />
+                                {/* Inner circle */}
+                                <div className="absolute inset-3 rounded-full border border-cyan-500/40" />
+                                {/* Centre dot */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]" />
+                                </div>
+                                {/* Crosshair lines */}
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-full h-px bg-cyan-400/20" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="h-full w-px bg-cyan-400/20" />
+                                </div>
                             </div>
+                        </div>
+
+                        {/* Vertical scanning line */}
+                        {!detectedEmotion && (
+                            <div
+                                className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_8px_#22d3ee] opacity-90"
+                                style={{ animation: 'scanLine 2s ease-in-out infinite' }}
+                            />
+                        )}
+
+                        {/* Detection success flash */}
+                        {detectedEmotion && (
+                            <div className="absolute inset-0 border-2 border-cyan-400/60 shadow-[inset_0_0_30px_#22d3ee30] pointer-events-none" />
+                        )}
+
+                        {/* Status overlay — bottom of video */}
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#041922]/90 to-transparent px-3 py-2">
+                            {detectedEmotion ? (
+                                <div className="text-center">
+                                    <p className="text-xs font-mono text-cyan-500 uppercase tracking-widest">FACE DETECTED</p>
+                                    <p className="text-sm font-mono font-bold text-cyan-300 tracking-wide mt-0.5">
+                                        "{EMOTION_LABELS[detectedEmotion]?.replace(/^[^ ]+ /, '') ?? detectedEmotion.toUpperCase()}"
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-xs font-mono text-cyan-600 text-center animate-pulse tracking-widest uppercase">
+                                    SCANNING...
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Readout bar */}
+                    <div className="px-4 py-3 border-t border-cyan-900/40 flex items-center justify-between gap-3">
+                        {detectedEmotion ? (
+                            <>
+                                <div>
+                                    <p className="text-[10px] font-mono text-cyan-700 uppercase tracking-widest">EXPRESSION</p>
+                                    <p className="text-sm font-mono font-bold text-cyan-300">
+                                        {EMOTION_LABELS[detectedEmotion] ?? detectedEmotion}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-mono text-cyan-700 uppercase tracking-widest">CONFIDENCE</p>
+                                    <p className="text-sm font-mono font-bold text-cyan-400">
+                                        {Math.round(confidence * 100)}%
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-mono text-cyan-700 uppercase tracking-widest">MOOD SCORE</p>
+                                    <p className="text-sm font-mono font-bold text-cyan-400">
+                                        {EMOTION_TO_MOOD[detectedEmotion] ?? 5}/10
+                                    </p>
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-xs font-mono text-cyan-700 animate-pulse w-full text-center">
+                                ALIGN FACE WITH RETICLE...
+                            </p>
                         )}
                     </div>
 
-                    {/* Detected Emotion Result */}
-                    {detectedEmotion ? (
-                        <div className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border border-purple-100 dark:border-purple-700">
-                            <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Detected emotion</p>
-                                <p className="text-sm font-bold text-gray-900 dark:text-white">
-                                    {EMOTION_LABELS[detectedEmotion] ?? detectedEmotion}
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Confidence</p>
-                                <p className="text-sm font-bold text-purple-600 dark:text-purple-400">
-                                    {Math.round(confidence * 100)}%
-                                </p>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-center text-gray-500 dark:text-gray-400 animate-pulse">
-                            Scanning your face... look at the camera
-                        </p>
-                    )}
-
                     {/* Stop button */}
-                    <button
-                        type="button"
-                        onClick={stopCamera}
-                        className="w-full flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-red-500 transition py-1"
-                    >
-                        <CameraOff className="w-3 h-3" />
-                        Stop camera
-                    </button>
+                    <div className="px-4 pb-3">
+                        <button
+                            type="button"
+                            onClick={stopCamera}
+                            className="w-full flex items-center justify-center gap-2 text-[10px] font-mono text-cyan-800 hover:text-red-400 border border-cyan-900/60 hover:border-red-500/40 rounded py-1.5 transition tracking-widest uppercase"
+                        >
+                            <CameraOff className="w-3 h-3" />
+                            TERMINATE SCAN
+                        </button>
+                    </div>
                 </div>
             )}
 
             {error && (
-                <p className="text-xs text-red-500 mt-2">{error}</p>
+                <p className="text-xs font-mono text-red-400 px-4 pb-3 text-center">{error}</p>
             )}
+
+            {/* Scanning line keyframe */}
+            <style>{`
+                @keyframes scanLine {
+                    0%   { top: 10%; }
+                    50%  { top: 85%; }
+                    100% { top: 10%; }
+                }
+            `}</style>
         </div>
     )
 }
+

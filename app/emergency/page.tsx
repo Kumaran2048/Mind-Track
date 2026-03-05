@@ -152,9 +152,8 @@ export default function EmergencyPage() {
                     )}
                   </div>
                   <span
-                    className={`text-xl transition transform ${
-                      expandedTechnique === technique.name ? 'rotate-180' : ''
-                    }`}
+                    className={`text-xl transition transform ${expandedTechnique === technique.name ? 'rotate-180' : ''
+                      }`}
                   >
                     ↓
                   </span>

@@ -11,6 +11,66 @@ interface StreakData {
   lastActiveDate: string | null
 }
 
+/** Compute streaks directly from mood_logs rows (as fallback or primary). */
+function computeStreaksFromLogs(logs: { created_at: string }[]): StreakData {
+  if (!logs || logs.length === 0) {
+    return { currentStreak: 0, longestStreak: 0, lastActiveDate: null }
+  }
+
+  // Get unique days (YYYY-MM-DD), sorted newest first
+  const days = Array.from(
+    new Set(logs.map((l) => l.created_at.split('T')[0]))
+  ).sort((a, b) => (a > b ? -1 : 1))
+
+  const today = new Date().toISOString().split('T')[0]
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
+
+  let current = 0
+  let longest = 0
+  let streak = 0
+  let prevDay: string | null = null
+
+  // Walk days newest→oldest to build streaks
+  for (const day of days) {
+    if (prevDay === null) {
+      // Start streak only if last entry is today or yesterday
+      if (day === today || day === yesterday) {
+        streak = 1
+      } else {
+        streak = 0
+      }
+    } else {
+      const prev = new Date(prevDay)
+      const curr = new Date(day)
+      const diff = Math.round((prev.getTime() - curr.getTime()) / 86400000)
+      if (diff === 1) {
+        streak += 1
+      } else {
+        streak = 0
+      }
+    }
+    if (streak > longest) longest = streak
+    prevDay = day
+  }
+
+  // Re-compute current streak (consecutive days ending today or yesterday)
+  current = 0
+  for (let i = 0; i < days.length; i++) {
+    const expected = new Date(Date.now() - i * 86400000).toISOString().split('T')[0]
+    if (days[i] === expected) {
+      current += 1
+    } else {
+      break
+    }
+  }
+
+  return {
+    currentStreak: current,
+    longestStreak: Math.max(longest, current),
+    lastActiveDate: days[0] ?? null,
+  }
+}
+
 export function StreakTracker({ userId }: { userId: string }) {
   const supabase = createClient()
   const [streak, setStreak] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, lastActiveDate: null })
@@ -22,22 +82,33 @@ export function StreakTracker({ userId }: { userId: string }) {
 
   async function fetchStreakData() {
     try {
-      const { data, error } = await supabase.from('streaks').select('*').eq('user_id', userId).single()
+      // --- Try the streaks table first ---
+      const { data, error } = await supabase
+        .from('streaks')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle() // uses maybeSingle() → returns null instead of 406 when no row
 
-      if (error && error.code !== 'PGRST116') {
-        console.log('[v0] Error fetching streak:', error)
-        return
-      }
-
-      if (data) {
+      if (!error && data) {
         setStreak({
           currentStreak: data.current_streak || 0,
           longestStreak: data.longest_streak || 0,
           lastActiveDate: data.last_active_date,
         })
+        return
       }
+
+      // --- Fallback: compute from mood_logs (covers 406 / table missing) ---
+      const { data: logs } = await supabase
+        .from('mood_logs')
+        .select('created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      setStreak(computeStreaksFromLogs(logs ?? []))
     } catch (err) {
-      console.log('[v0] Error:', err)
+      console.log('[v0] StreakTracker error, using fallback:', err)
+      // Don't crash — just show zeroes
     } finally {
       setLoading(false)
     }
