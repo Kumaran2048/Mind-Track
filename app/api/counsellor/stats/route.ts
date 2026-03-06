@@ -17,28 +17,29 @@ export async function GET(req: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Get all patients assigned to this counsellor
-    const { data: assignments } = await supabase
-        .from('counsellor_patients')
-        .select('patient_user_id, nickname, added_at')
-        .eq('counsellor_id', counsellor.id)
+    // Get ALL students who have mood logs (not just manually-added ones)
+    const { data: allLogs } = await supabase
+        .from('mood_logs')
+        .select('user_id')
 
-    if (!assignments || assignments.length === 0) {
+    if (!allLogs || allLogs.length === 0) {
         return NextResponse.json({
             totalPatients: 0, highRiskCount: 0, avgRiskScore: 0,
             riskCounts: { High: 0, Medium: 0, Low: 0, None: 0 },
         })
     }
 
+    const allUserIds = [...new Set(allLogs.map((l: any) => l.user_id))]
+
     const riskCounts = { High: 0, Medium: 0, Low: 0, None: 0 }
     let totalRisk = 0
     let assessed = 0
 
-    for (const a of assignments) {
+    for (const uid of allUserIds) {
         const { data: logs } = await supabase
             .from('mood_logs')
             .select('mood_score')
-            .eq('user_id', a.patient_user_id)
+            .eq('user_id', uid)
             .order('created_at', { ascending: false })
             .limit(7)
 
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-        totalPatients: assignments.length,
+        totalPatients: allUserIds.length,
         highRiskCount: riskCounts.High,
         avgRiskScore: assessed > 0 ? Math.round(totalRisk / assessed) : 0,
         riskCounts,
