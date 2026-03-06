@@ -1,14 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function POST(req: Request) {
+  // Initialise clients inside the handler so env vars are read at request-time,
+  // not at build-time (which causes "supabaseUrl is required" on Vercel).
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
   try {
     const { userId } = await req.json()
     if (!userId) return new Response('Missing userId', { status: 400 })
